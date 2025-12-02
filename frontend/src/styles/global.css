@@ -1,0 +1,70 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    /* Background: Light Clean vs Dark Mesh Gradient */
+    @apply bg-light-bg text-light-text dark:bg-fintech-bg dark:bg-fintech-mesh dark:text-fintech-text font-sans antialiased transition-colors duration-300 min-h-screen;
+  }
+}
+
+@layer components {
+  /* --- Glassmorphism Panel --- */
+  .glass-panel {
+    @apply bg-light-card/80 dark:bg-fintech-card/70 
+           backdrop-blur-xl 
+           border border-light-border dark:border-fintech-border 
+           rounded-2xl shadow-sm transition-all duration-300;
+  }
+  
+  /* Hover Effect: Glow Cyan di Dark Mode */
+  .glass-panel:hover {
+    @apply border-light-primary/30 dark:border-fintech-primary/30;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.05); /* Default shadow */
+  }
+
+  /* Khusus dark mode hover glow */
+  .dark .glass-panel:hover {
+    box-shadow: 0 0 25px rgba(6, 182, 212, 0.1); /* Cyan glow halus */
+  }
+
+  /* --- Input Field --- */
+  .input-field {
+    @apply bg-light-bg dark:bg-fintech-bg 
+           text-light-text dark:text-white 
+           border border-light-border dark:border-fintech-border 
+           rounded-xl p-4 outline-none 
+           focus:border-light-primary dark:focus:border-fintech-primary 
+           focus:ring-1 focus:ring-light-primary dark:focus:ring-fintech-primary 
+           transition-all placeholder-light-muted dark:placeholder-fintech-muted;
+  }
+
+  /* --- Primary Button (Neon Gradient) --- */
+  .btn-primary {
+    @apply bg-light-primary dark:bg-primary-gradient 
+           text-white font-bold py-3 px-6 rounded-xl 
+           hover:brightness-110 active:scale-[0.98] transition-all 
+           shadow-lg shadow-blue-500/20 dark:shadow-neon;
+  }
+
+  /* --- Status Badges --- */
+  .badge-success {
+    @apply text-fintech-success bg-fintech-success/10 px-2 py-1 rounded text-xs font-medium;
+  }
+  .badge-danger {
+    @apply text-fintech-danger bg-fintech-danger/10 px-2 py-1 rounded text-xs font-medium;
+  }
+
+  /* Scrollbar Kustom */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-fintech-bg;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-fintech-border rounded-full hover:bg-fintech-muted;
+  }
+}

@@ -1,0 +1,76 @@
+# ======================================
+# Global Node.js Ignore
+# ======================================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+package-lock.json
+
+# ======================================
+# Environment Files
+# ======================================
+.env*
+.env.*.local
+.env.production
+
+# ======================================
+# Build & Dist Outputs
+# ======================================
+dist/
+build/
+.cache/
+.out/
+.vite/
+
+# ======================================
+# System Files
+# ======================================
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# ======================================
+# Logs
+# ======================================
+logs/
+*.log
+*.tmp
+
+# ======================================
+# OS Specific
+# ======================================
+# macOS
+._*
+.Spotlight-V100
+.Trashes
+
+# Windows
+ehthumbs.db
+Desktop.ini
+
+# ======================================
+# Monorepo Specific
+# ======================================
+# Backend
+backend/node_modules/
+backend/.env
+backend/dist/
+backend/logs/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+
+# ======================================
+# Misc
+# ======================================
+*.local
+*.bak
+*.old
+*.orig

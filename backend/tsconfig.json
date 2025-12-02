@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    /* Language and Environment */
+    "target": "es2016",
+    "module": "commonjs",             /* Penting: Set ke commonjs agar kompatibel dengan ts-node default */
+    "moduleResolution": "node",
+    
+    /* Modules */
+    "rootDir": "./src",
+    "outDir": "./dist",
+    "esModuleInterop": true,          /* Penting: Mengizinkan 'import express from express' */
+    "forceConsistentCasingInFileNames": true,
+
+    /* Type Checking */
+    "strict": true,
+    "skipLibCheck": true,
+    
+    /* Hindari setting ini jika menggunakan ts-node standard */
+    "verbatimModuleSyntax": false
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules"]
+}
