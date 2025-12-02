@@ -18,25 +18,28 @@ export const NETWORKS = {
   }
 };
 
-const ROUTER_ADDRESS = "0xC532a742dfF90d0617d079D8f0ac87a685971596"; 
+// FIX: Gunakan alamat lowercase agar Ethers v6 tidak komplain soal checksum
+const ROUTER_ADDRESS = "0xc532a742dff90d0617d079d8f0ac87a685971596"; 
 
+// Update ABI to standard Human-Readable format (removing 'calldata', 'memory', 'external' keywords for better compatibility)
 const ROUTER_ABI = [
-  "function swapExactETHForTokens(uint amountOutMin, address[] calldata path, address to, uint deadline) external payable returns (uint[] memory amounts)",
-  "function getAmountsOut(uint amountIn, address[] calldata path) external view returns (uint[] memory amounts)"
+  "function swapExactETHForTokens(uint amountOutMin, address[] path, address to, uint deadline) payable returns (uint[] amounts)",
+  "function getAmountsOut(uint amountIn, address[] path) view returns (uint[] amounts)",
+  "function addLiquidityETH(address token, uint amountTokenDesired, uint amountTokenMin, uint amountETHMin, address to, uint deadline) payable returns (uint amountToken, uint amountETH, uint liquidity)"
 ];
 
 const ERC20_ABI = [
-    "function approve(address spender, uint256 amount) external returns (bool)",
-    "function balanceOf(address account) external view returns (uint256)",
-    "function decimals() external view returns (uint8)",
-    "function transfer(address to, uint256 amount) external returns (bool)" // Added transfer
+    "function approve(address spender, uint256 amount) returns (bool)",
+    "function balanceOf(address account) view returns (uint256)",
+    "function decimals() view returns (uint8)",
+    "function transfer(address to, uint256 amount) returns (bool)" 
 ];
 
-// Address Token di Sepolia
+// FIX: Gunakan alamat lowercase untuk Token juga
 export const TOKENS: Record<string, string> = {
     ETH: "NATIVE",
-    USDC: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238", 
-    WETH: "0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14"
+    USDC: "0x1c7d4b196cb0c7b01d743fbc6116a902379c7238", 
+    WETH: "0xfff9976782d46cc05630d1f6ebab18b2324d6b14"
 };
 
 // --- CORE FUNCTIONS ---
@@ -117,7 +120,7 @@ export const executeSwapETHForToken = async (signer: any, tokenOutAddress: strin
             await router.getAmountsOut(amountIn, path);
         } catch (error) {
             console.error("Liquidity Check Failed:", error);
-            throw new Error("Insufficient Liquidity for this pair on Testnet");
+            throw new Error("Liquidity Empty");
         }
 
         const tx = await router.swapExactETHForTokens(
@@ -132,6 +135,44 @@ export const executeSwapETHForToken = async (signer: any, tokenOutAddress: strin
     } catch (error: any) {
         if (error.reason) throw new Error(`Blockchain Error: ${error.reason}`);
         if (error.message.includes("insufficient funds")) throw new Error("Insufficient funds for gas + value");
+        if (error.message === "Liquidity Empty") throw error;
         throw error;
+    }
+};
+
+// --- FUNGSI ADD LIQUIDITY ---
+export const addLiquidityETH = async (signer: any, tokenAddress: string, amountTokenDesired: string, amountETHDesired: string) => {
+    try {
+        const router = new Contract(ROUTER_ADDRESS, ROUTER_ABI, signer);
+        const tokenContract = new Contract(tokenAddress, ERC20_ABI, signer);
+
+        const decimals = await tokenContract.decimals();
+        const amountToken = ethers.parseUnits(amountTokenDesired, decimals);
+        const amountETH = ethers.parseEther(amountETHDesired);
+        const deadline = Math.floor(Date.now() / 1000) + 60 * 20;
+
+        // 1. Approve Router untuk menggunakan Token kita
+        // Note: Pastikan user punya saldo token ini di walletnya!
+        console.log("Approving token...");
+        const approveTx = await tokenContract.approve(ROUTER_ADDRESS, amountToken);
+        await approveTx.wait();
+        console.log("Token Approved");
+
+        // 2. Add Liquidity
+        console.log("Adding liquidity...");
+        const tx = await router.addLiquidityETH(
+            tokenAddress,
+            amountToken,
+            0, // amountTokenMin (slippage tolerance, set 0 for dev)
+            0, // amountETHMin
+            await signer.getAddress(),
+            deadline,
+            { value: amountETH }
+        );
+
+        return tx.wait();
+    } catch (error: any) {
+        console.error("Add Liquidity Failed:", error);
+        throw new Error(error.reason || error.message || "Add Liquidity Failed");
     }
 };
