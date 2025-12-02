@@ -34,13 +34,16 @@ const SwapCard = ({ onTokenChange }: SwapCardProps) => {
   
   // State Modal Selection & Settings
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false); // State untuk Settings Modal
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false); 
   const [selectingSide, setSelectingSide] = useState<'in' | 'out'>('in');
   const [searchQuery, setSearchQuery] = useState("");
 
   // Swap Settings State
-  const [slippage, setSlippage] = useState<number>(0.5); // Default 0.5%
-  const [deadline, setDeadline] = useState<number>(20); // Default 20 menit
+  const [slippage, setSlippage] = useState<number>(0.5); 
+  const [deadline, setDeadline] = useState<number>(20); 
+
+  // State Saldo Token yang Dipilih
+  const [tokenBalance, setTokenBalance] = useState<string>("0");
 
   useEffect(() => {
     const loadTokens = async () => {
@@ -60,6 +63,58 @@ const SwapCard = ({ onTokenChange }: SwapCardProps) => {
     };
     loadTokens();
   }, []);
+
+  // Effect untuk Update Balance Asli dari Blockchain
+  useEffect(() => {
+    const fetchTokenBalance = async () => {
+        if (!isConnected || !account || !tokenIn) {
+            setTokenBalance("0");
+            return;
+        }
+
+        try {
+            if (tokenIn.symbol === 'ETH') {
+                // Gunakan saldo Native ETH dari Context
+                setTokenBalance(balance); 
+            } else {
+                // Cek apakah kita punya address kontrak untuk token ini di testnet (mapping dari web3.ts)
+                const tokenAddress = TOKENS[tokenIn.symbol];
+
+                if (tokenAddress) {
+                    // Fetch Real Balance Token dari Blockchain
+                    // @ts-ignore
+                    const provider = new ethers.BrowserProvider(window.ethereum);
+                    
+                    // ABI Minimal untuk cek saldo ERC20
+                    const erc20Abi = [
+                        "function balanceOf(address owner) view returns (uint256)",
+                        "function decimals() view returns (uint8)"
+                    ];
+                    
+                    const contract = new ethers.Contract(tokenAddress, erc20Abi, provider);
+                    
+                    try {
+                        const rawBalance = await contract.balanceOf(account);
+                        const decimals = await contract.decimals();
+                        const formattedBalance = ethers.formatUnits(rawBalance, decimals);
+                        setTokenBalance(formattedBalance);
+                    } catch (err) {
+                        console.error("Error reading contract:", err);
+                        setTokenBalance("0");
+                    }
+                } else {
+                    // Jika token tidak terdaftar di config TOKENS kita (karena ini testnet terbatas), saldo 0
+                    setTokenBalance("0");
+                }
+            }
+        } catch (err) {
+            console.error("Error fetching token balance:", err);
+            setTokenBalance("0");
+        }
+    };
+
+    fetchTokenBalance();
+  }, [tokenIn, balance, isConnected, account]);
 
   useEffect(() => {
     const timer = setTimeout(async () => {
@@ -81,9 +136,13 @@ const SwapCard = ({ onTokenChange }: SwapCardProps) => {
 
   const handleMax = () => {
       if (!isConnected || !tokenIn) return;
-      const bal = parseFloat(balance);
+      
+      const bal = parseFloat(tokenBalance); 
+      
+      // Sisakan 0.01 ETH untuk gas jika tokennya ETH
       const safeMax = tokenIn.symbol === 'ETH' ? Math.max(0, bal - 0.01) : bal;
-      setAmountIn(safeMax.toFixed(4));
+      
+      setAmountIn(safeMax.toString());
   };
 
   const handleSwitchTokens = () => {
@@ -136,8 +195,6 @@ const SwapCard = ({ onTokenChange }: SwapCardProps) => {
       const signer = await provider.getSigner();
       
       try {
-          // Note: Slippage & Deadline logic would be passed here in a real implementation
-          // e.g. executeSwapETHForToken(signer, TOKENS.USDC, amountIn, slippage, deadline)
           const tx = await executeSwapETHForToken(signer, TOKENS.USDC, amountIn); 
           addToast(`Swap Submitted! Hash: ${tx.hash.substring(0, 10)}...`, "success");
       } catch (chainError: any) {
@@ -195,7 +252,8 @@ const SwapCard = ({ onTokenChange }: SwapCardProps) => {
           <div className="flex items-center gap-2">
              <span className="flex items-center gap-1">
                 <Wallet size={12}/> 
-                {isConnected ? parseFloat(balance).toFixed(4) : '0.00'}
+                {/* Menampilkan saldo token yang dipilih */}
+                {isConnected ? parseFloat(tokenBalance).toLocaleString(undefined, { maximumFractionDigits: 4 }) : '0.00'}
              </span>
              {isConnected && (
                  <button 
@@ -226,9 +284,10 @@ const SwapCard = ({ onTokenChange }: SwapCardProps) => {
         </div>
       </div>
 
-      {isConnected && parseFloat(amountIn) > parseFloat(balance) && tokenIn.symbol === 'ETH' && (
+      {/* Warning Insufficient Balance */}
+      {isConnected && parseFloat(amountIn) > parseFloat(tokenBalance) && (
           <div className="flex items-center gap-2 text-fintech-danger text-xs mb-2 px-2 animate-pulse">
-              <AlertCircle size={12}/> Insufficient ETH balance
+              <AlertCircle size={12}/> Insufficient {tokenIn.symbol} balance
           </div>
       )}
 
@@ -291,18 +350,18 @@ const SwapCard = ({ onTokenChange }: SwapCardProps) => {
       {/* CTA Button */}
       <button 
         onClick={handleSwap} 
-        disabled={loading || (isConnected && parseFloat(amountIn) > parseFloat(balance) && tokenIn.symbol === 'ETH')}
+        disabled={loading || (isConnected && parseFloat(amountIn) > parseFloat(tokenBalance))}
         className={`w-full btn-primary flex justify-center items-center gap-2 text-lg disabled:opacity-50 disabled:cursor-not-allowed`}
       >
         {loading ? (
             <><Loader2 className="animate-spin" size={24}/> Processing...</>
         ) : (
             !isConnected ? "Connect Wallet" : 
-            (parseFloat(amountIn) > parseFloat(balance) && tokenIn.symbol === 'ETH' ? "Insufficient Balance" : "Swap Now")
+            (parseFloat(amountIn) > parseFloat(tokenBalance) ? `Insufficient ${tokenIn.symbol}` : "Swap Now")
         )}
       </button>
 
-      {/* Settings Modal - NEW */}
+      {/* Settings Modal */}
       {isSettingsOpen && (
         <div className="absolute inset-0 z-50 bg-light-card dark:bg-fintech-card animate-fade-in flex flex-col p-6 rounded-2xl">
              <div className="flex justify-between items-center mb-8">
