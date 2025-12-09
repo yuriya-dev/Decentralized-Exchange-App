@@ -1,59 +1,95 @@
 import { useState, useEffect } from 'react';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, Legend } from 'recharts';
-import { Wallet as WalletIcon, Send, QrCode, Copy, Check, ArrowRightLeft, Globe, Loader2, X } from 'lucide-react';
+import { 
+  AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer 
+} from 'recharts';
+import { 
+  Wallet as WalletIcon, Send, ArrowUpRight, ArrowDownRight, 
+  MoreHorizontal, Plus, Repeat, ArrowRightLeft, ChevronDown, Copy, X, Loader2 
+} from 'lucide-react';
 import { useWeb3 } from '../context/Web3Context';
 import { useToast } from '../context/ToastContext';
 import { fetchTokens } from '../lib/api';
 import { sendNativeToken, sendERC20Token, TOKENS, switchNetwork, NETWORKS } from '../lib/web3';
 import { ethers } from 'ethers';
-
-// Warna Chart
-const COLORS = ['#00A3FF', '#00D1FF', '#FFB039', '#FF4D4D', '#914dff'];
+import { useNavigate } from 'react-router-dom';
 
 const WalletPage = () => {
   const { account, balance, isConnected, chainId } = useWeb3();
   const { addToast } = useToast();
+  const navigate = useNavigate();
   
   const [assets, setAssets] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [totalBalanceUSD, setTotalBalanceUSD] = useState(0);
+  const [chartData, setChartData] = useState<any[]>([]);
   
-  // Modals
+  // Modals & Actions
   const [activeModal, setActiveModal] = useState<'send' | 'receive' | null>(null);
   const [selectedToken, setSelectedToken] = useState<any>(null);
-  
-  // Send Form State
   const [recipient, setRecipient] = useState('');
   const [amount, setAmount] = useState('');
   const [isSending, setIsSending] = useState(false);
+  const [timeframe, setTimeframe] = useState<'1D' | '1W' | '1M' | '1Y'>('1D');
 
-  // Copy State
-  const [copied, setCopied] = useState(false);
-
-  // 1. Fetch Data Aset & Kalkulasi Portofolio
+  // 1. Init Data
   useEffect(() => {
     const initData = async () => {
         setLoading(true);
         try {
-            // Ambil harga real-time
+            // Fetch Prices
             const tokenData = await fetchTokens(); 
             
-            // Simulasi Saldo (Di production, ini fetch dari blockchain via Contract.balanceOf loop)
-            // Kita gunakan ETH balance asli dari Web3Context, sisanya mock untuk demo visualisasi
-            const ethPrice = tokenData.find((t: any) => t.symbol === 'ETH')?.price || 2000;
+            // --- Kalkulasi Aset (Mock + Real ETH) ---
+            const ethPrice = tokenData.find((t: any) => t.symbol === 'ETH')?.price || 2200;
             const ethBalanceVal = parseFloat(balance);
             
             const portfolio = [
-                { name: 'ETH', symbol: 'ETH', balance: ethBalanceVal, price: ethPrice, value: ethBalanceVal * ethPrice, color: COLORS[0] },
-                // Mock tokens lainnya (karena kita di testnet dan user mungkin cuma punya ETH)
-                { name: 'USDC', symbol: 'USDC', balance: 150.5, price: 1.00, value: 150.5, color: COLORS[1] },
-                { name: 'Bitcoin', symbol: 'BTC', balance: 0.005, price: 42000, value: 0.005 * 42000, color: COLORS[2] },
+                { 
+                    name: 'Ethereum', 
+                    symbol: 'ETH', 
+                    balance: ethBalanceVal, 
+                    price: ethPrice, 
+                    value: ethBalanceVal * ethPrice, 
+                    change: 2.5,
+                    logo: 'https://cryptologos.cc/logos/ethereum-eth-logo.png'
+                },
+                { 
+                    name: 'USD Coin', 
+                    symbol: 'USDC', 
+                    balance: 150.5, 
+                    price: 1.00, 
+                    value: 150.5, 
+                    change: 0.01,
+                    logo: 'https://cryptologos.cc/logos/usd-coin-usdc-logo.png'
+                },
+                { 
+                    name: 'Bitcoin', 
+                    symbol: 'BTC', 
+                    balance: 0.005, 
+                    price: 42000, 
+                    value: 0.005 * 42000, 
+                    change: -1.2,
+                    logo: 'https://cryptologos.cc/logos/bitcoin-btc-logo.png'
+                },
             ];
 
             setAssets(portfolio);
-            setTotalBalanceUSD(portfolio.reduce((acc, curr) => acc + curr.value, 0));
-            // Default token untuk send
+            const total = portfolio.reduce((acc, curr) => acc + curr.value, 0);
+            setTotalBalanceUSD(total);
             setSelectedToken(portfolio[0]);
+
+            // --- Generate Mock Chart Data (Portfolio History) ---
+            // Membuat grafik yang seolah-olah naik turun sesuai timeframe
+            const points = timeframe === '1D' ? 24 : timeframe === '1W' ? 7 : 30;
+            const history = [];
+            let currentVal = total * 0.9; // Start slightly lower
+            for (let i = 0; i < points; i++) {
+                currentVal = currentVal * (1 + (Math.random() - 0.45) * 0.05);
+                history.push({ name: i, value: currentVal });
+            }
+            // Pastikan titik terakhir sama dengan saldo saat ini
+            history.push({ name: points, value: total });
+            setChartData(history);
 
         } catch (e) {
             console.error(e);
@@ -63,15 +99,7 @@ const WalletPage = () => {
     };
 
     if (isConnected) initData();
-  }, [isConnected, balance]);
-
-  const handleCopy = () => {
-      if (account) {
-          navigator.clipboard.writeText(account);
-          setCopied(true);
-          setTimeout(() => setCopied(false), 2000);
-      }
-  };
+  }, [isConnected, balance, timeframe]);
 
   const handleSend = async () => {
       if (!ethers.isAddress(recipient)) return addToast("Invalid Address", "error");
@@ -85,266 +113,262 @@ const WalletPage = () => {
 
           if (selectedToken.symbol === 'ETH') {
               const tx = await sendNativeToken(signer, recipient, amount);
-              addToast(`Sent ${amount} ETH! Tx: ${tx.hash.substring(0,10)}...`, "success");
+              addToast(`Sent ${amount} ETH!`, "success");
           } else if (selectedToken.symbol === 'USDC') {
-              // Gunakan address mock USDC Sepolia
               const tx = await sendERC20Token(signer, TOKENS.USDC, recipient, amount);
-              addToast(`Sent ${amount} USDC! Tx: ${tx.hash.substring(0,10)}...`, "success");
+              addToast(`Sent ${amount} USDC!`, "success");
           } else {
-              addToast("Token transfer not supported in this demo", "info");
+              addToast("Token transfer simulation only", "info");
           }
           setActiveModal(null);
-          setAmount('');
-          setRecipient('');
       } catch (error: any) {
-          console.error(error);
-          addToast("Transfer Failed: " + (error.message || "Unknown error"), "error");
+          addToast("Transfer Failed: " + error.message, "error");
       } finally {
           setIsSending(false);
       }
   };
 
-  const handleNetworkSwitch = (netKey: keyof typeof NETWORKS) => {
-      switchNetwork(NETWORKS[netKey]);
-  };
-
   if (!isConnected) {
       return (
-          <div className="flex flex-col items-center justify-center h-[70vh] text-center space-y-4">
-              <div className="p-6 bg-fintech-primary/10 rounded-full">
-                  <WalletIcon size={48} className="text-fintech-primary" />
+          <div className="flex flex-col items-center justify-center h-[70vh] text-center space-y-6 animate-fade-in">
+              <div className="w-20 h-20 bg-fintech-card rounded-3xl flex items-center justify-center shadow-neon border border-fintech-border">
+                  <WalletIcon size={40} className="text-fintech-primary" />
               </div>
-              <h2 className="text-2xl font-bold dark:text-white">Wallet Not Connected</h2>
-              <p className="text-light-muted dark:text-fintech-muted">Please connect your wallet to view your portfolio.</p>
+              <h2 className="text-3xl font-bold dark:text-white">Connect your wallet</h2>
+              <p className="text-light-muted dark:text-fintech-muted max-w-md">Connect your wallet to see your tokens, transactions, and portfolio analytics.</p>
           </div>
       );
   }
 
+  // Calculate Change (Mock)
+  const isPositive = chartData.length > 0 && chartData[chartData.length - 1].value >= chartData[0].value;
+  const percentageChange = 2.21; // Mock
+
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 animate-fade-in pb-10">
+    <div className="max-w-7xl mx-auto pb-20 animate-fade-in">
       
-      {/* Left Column: Asset Allocation & Actions */}
-      <div className="order-2 lg:order-1 lg:col-span-8 space-y-8">
-         
-         {/* Portfolio Summary Card */}
-         <div className="glass-panel p-8 relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-64 h-64 bg-fintech-primary/10 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none"></div>
-            
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center relative z-10">
-                <div>
-                    <h2 className="text-light-muted dark:text-fintech-muted text-sm font-medium mb-1">Total Balance</h2>
-                    <h1 className="text-4xl font-bold dark:text-white">${totalBalanceUSD.toLocaleString(undefined, {minimumFractionDigits: 2})}</h1>
-                    <div className="flex items-center gap-2 mt-2 text-fintech-success text-sm font-medium bg-fintech-success/10 px-2 py-1 rounded w-fit">
-                        <span>+2.5%</span> <span>vs last week</span>
-                    </div>
-                </div>
-                
-                <div className="flex gap-3 mt-6 md:mt-0">
-                    <button onClick={() => setActiveModal('send')} className="flex items-center gap-2 btn-primary px-6">
-                        <Send size={18} /> Send
-                    </button>
-                    <button onClick={() => setActiveModal('receive')} className="flex items-center gap-2 px-6 py-3 rounded-xl border border-fintech-primary text-fintech-primary hover:bg-fintech-primary/10 transition-colors font-bold">
-                        <QrCode size={18} /> Receive
-                    </button>
-                </div>
-            </div>
-         </div>
+      {/* --- HEADER SECTION --- */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 gap-4">
+          <div>
+             <div className="flex items-center gap-3 mb-2">
+                {/* Avatar Placeholder */}
+                <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-yellow-400 to-orange-500 border-2 border-white dark:border-fintech-bg"></div>
+                <span className="text-lg font-medium text-light-muted dark:text-fintech-muted font-mono bg-light-card dark:bg-fintech-card px-3 py-1 rounded-full border border-light-border dark:border-fintech-border flex items-center gap-2">
+                    {account?.substring(0, 6)}...{account?.substring(account.length - 4)}
+                    <Copy size={12} className="cursor-pointer hover:text-fintech-primary" onClick={() => navigator.clipboard.writeText(account || "")}/>
+                </span>
+             </div>
+             <h1 className="text-5xl font-bold dark:text-white tracking-tight mb-2">
+                ${totalBalanceUSD.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+             </h1>
+             <div className={`flex items-center gap-1 font-medium ${isPositive ? 'text-fintech-success' : 'text-fintech-danger'}`}>
+                {isPositive ? <ArrowUpRight size={20}/> : <ArrowDownRight size={20}/>}
+                <span>${(totalBalanceUSD * 0.02).toFixed(2)} ({percentageChange}%)</span>
+             </div>
+          </div>
 
-         {/* Asset Allocation Chart */}
-         <div className="glass-panel p-6">
-            <h3 className="font-bold text-lg dark:text-white mb-6">Asset Allocation</h3>
-            <div className="h-[300px] w-full flex items-center justify-center">
-                <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                        <Pie
-                            data={assets}
-                            cx="50%"
-                            cy="50%"
-                            innerRadius={60}
-                            outerRadius={100}
-                            paddingAngle={5}
-                            dataKey="value"
-                        >
-                            {assets.map((entry, index) => (
-                                <Cell key={`cell-${index}`} fill={entry.color} stroke="none" />
-                            ))}
-                        </Pie>
-                        <RechartsTooltip 
-                            contentStyle={{ backgroundColor: '#0F172A', borderColor: '#1E293B', borderRadius: '12px', color: '#fff' }}
-                            formatter={(value: number) => `$${value.toLocaleString()}`}
-                        />
-                        <Legend verticalAlign="bottom" height={36} iconType="circle"/>
-                    </PieChart>
-                </ResponsiveContainer>
-            </div>
-         </div>
-
-         {/* Asset List */}
-         <div className="glass-panel p-6">
-            <h3 className="font-bold text-lg dark:text-white mb-4">Your Assets</h3>
-            <div className="space-y-4">
-                {assets.map((asset) => (
-                    <div key={asset.symbol} className="flex justify-between items-center p-4 bg-light-bg dark:bg-fintech-bg/50 rounded-xl hover:bg-light-primary/5 dark:hover:bg-fintech-cardHover transition-colors">
-                        <div className="flex items-center gap-4">
-                            <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold" style={{ backgroundColor: asset.color }}>
-                                {asset.symbol[0]}
-                            </div>
-                            <div>
-                                <div className="font-bold dark:text-white">{asset.name}</div>
-                                <div className="text-xs text-light-muted dark:text-fintech-muted">{asset.balance} {asset.symbol}</div>
-                            </div>
-                        </div>
-                        <div className="text-right">
-                            <div className="font-bold dark:text-white">${asset.value.toLocaleString()}</div>
-                            <div className="text-xs text-light-muted dark:text-fintech-muted">${asset.price}/token</div>
-                        </div>
-                    </div>
-                ))}
-            </div>
-         </div>
+          {/* Network Badge */}
+          <div className="bg-light-card dark:bg-fintech-card border border-light-border dark:border-fintech-border px-4 py-2 rounded-xl flex items-center gap-2 text-sm font-medium dark:text-white shadow-sm">
+             <div className={`w-2 h-2 rounded-full ${chainId === 11155111 ? 'bg-fintech-success' : 'bg-purple-500'}`}></div>
+             {chainId === 11155111 ? 'Ethereum Sepolia' : chainId === 80002 ? 'Polygon Amoy' : 'Unknown Network'}
+             <ChevronDown size={16} className="text-gray-500"/>
+          </div>
       </div>
 
-      {/* Right Column: Network & Tools */}
-      <div className="order-1 lg:order-2 lg:col-span-4 space-y-8">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           
-          {/* Network Switcher Card */}
-          <div className="glass-panel p-6">
-              <h3 className="font-bold dark:text-white mb-4 flex items-center gap-2">
-                  <Globe size={18} className="text-fintech-primary"/> Network
-              </h3>
-              <div className="space-y-2">
-                  <button 
-                    onClick={() => handleNetworkSwitch('SEPOLIA')}
-                    className={`w-full flex items-center justify-between p-3 rounded-xl border transition-all ${chainId === 11155111 ? 'border-fintech-success bg-fintech-success/10 text-fintech-success' : 'border-light-border dark:border-fintech-border text-light-muted dark:text-fintech-muted hover:border-fintech-primary hover:text-fintech-primary'}`}
-                  >
-                      <span className="flex items-center gap-2">
-                          <div className={`w-2 h-2 rounded-full ${chainId === 11155111 ? 'bg-fintech-success' : 'bg-gray-400'}`}></div>
-                          Sepolia Testnet
-                      </span>
-                      {chainId === 11155111 && <Check size={16}/>}
-                  </button>
-                  
-                  <button 
-                    onClick={() => handleNetworkSwitch('POLYGON_AMOY')}
-                    className={`w-full flex items-center justify-between p-3 rounded-xl border transition-all ${chainId === 80002 ? 'border-purple-500 bg-purple-500/10 text-purple-500' : 'border-light-border dark:border-fintech-border text-light-muted dark:text-fintech-muted hover:border-purple-500 hover:text-purple-500'}`}
-                  >
-                      <span className="flex items-center gap-2">
-                          <div className={`w-2 h-2 rounded-full ${chainId === 80002 ? 'bg-purple-500' : 'bg-gray-400'}`}></div>
-                          Polygon Amoy
-                      </span>
-                      {chainId === 80002 && <Check size={16}/>}
-                  </button>
-              </div>
+          {/* --- LEFT COLUMN (Chart & Tokens) --- */}
+          <div className="lg:col-span-2 space-y-8">
+             
+             {/* 1. Portfolio Chart */}
+             <div className="h-[350px] w-full">
+                 <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={chartData}>
+                        <defs>
+                            <linearGradient id="colorVal" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="5%" stopColor="#00A3FF" stopOpacity={0.3}/>
+                                <stop offset="95%" stopColor="#00A3FF" stopOpacity={0}/>
+                            </linearGradient>
+                        </defs>
+                        <XAxis dataKey="name" hide />
+                        <YAxis hide domain={['dataMin', 'dataMax']} />
+                        <Tooltip 
+                            contentStyle={{ backgroundColor: '#0F172A', border: '1px solid #1E293B', borderRadius: '12px' }}
+                            itemStyle={{ color: '#fff' }}
+                            formatter={(val: number) => [`$${val.toFixed(2)}`, 'Value']}
+                            labelStyle={{ display: 'none' }}
+                        />
+                        <Area 
+                            type="monotone" 
+                            dataKey="value" 
+                            stroke="#00A3FF" 
+                            strokeWidth={3} 
+                            fillOpacity={1} 
+                            fill="url(#colorVal)" 
+                        />
+                    </AreaChart>
+                 </ResponsiveContainer>
+                 
+                 {/* Timeframe Toggles */}
+                 <div className="flex gap-2 mt-[-20px] relative z-10">
+                    {['1D', '1W', '1M', '1Y'].map((t) => (
+                        <button 
+                            key={t}
+                            onClick={() => setTimeframe(t as any)}
+                            className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${timeframe === t ? 'bg-fintech-card border border-fintech-primary text-fintech-primary' : 'text-light-muted dark:text-fintech-muted hover:bg-fintech-card'}`}
+                        >
+                            {t}
+                        </button>
+                    ))}
+                 </div>
+             </div>
+
+             {/* 2. Token List */}
+             <div>
+                 <h3 className="text-xl font-bold dark:text-white mb-4">Tokens</h3>
+                 <div className="bg-light-card dark:bg-fintech-card border border-light-border dark:border-fintech-border rounded-2xl overflow-hidden shadow-sm">
+                     {assets.map((asset, i) => (
+                         <div key={asset.symbol} className="flex items-center justify-between p-4 hover:bg-light-bg dark:hover:bg-fintech-bg/50 transition-colors border-b border-light-border dark:border-fintech-border last:border-0 cursor-pointer">
+                             <div className="flex items-center gap-4">
+                                 <img src={asset.logo} alt={asset.symbol} className="w-10 h-10 rounded-full"/>
+                                 <div>
+                                     <div className="font-bold dark:text-white text-lg">{asset.name}</div>
+                                     <div className="text-sm text-light-muted dark:text-fintech-muted">{asset.balance.toFixed(4)} {asset.symbol}</div>
+                                 </div>
+                             </div>
+                             <div className="text-right">
+                                 <div className="font-bold dark:text-white text-lg">${asset.value.toLocaleString(undefined, {maximumFractionDigits: 2})}</div>
+                                 <div className={`text-sm font-medium ${asset.change >= 0 ? 'text-fintech-success' : 'text-fintech-danger'}`}>
+                                     {asset.change >= 0 ? '+' : ''}{asset.change}%
+                                 </div>
+                             </div>
+                         </div>
+                     ))}
+                 </div>
+             </div>
           </div>
 
-          {/* Quick Actions / History Placeholder */}
-          <div className="glass-panel p-6">
-              <h3 className="font-bold dark:text-white mb-4">Recent Activity</h3>
-              <div className="text-center py-8 text-light-muted dark:text-fintech-muted text-sm">
-                  <ArrowRightLeft className="mx-auto mb-2 opacity-50" size={32}/>
-                  No recent transactions found.
+          {/* --- RIGHT COLUMN (Actions & Activity) --- */}
+          <div className="space-y-8">
+              
+              {/* 3. Quick Actions Grid */}
+              <div className="grid grid-cols-2 gap-3">
+                  <button onClick={() => navigate('/swap')} className="flex flex-col items-start justify-between p-4 h-24 rounded-2xl bg-light-card dark:bg-fintech-card border border-light-border dark:border-fintech-border hover:bg-light-bg dark:hover:bg-fintech-cardHover transition-all group">
+                      <div className="p-2 rounded-lg bg-fintech-primary/10 text-fintech-primary group-hover:scale-110 transition-transform">
+                          <Repeat size={20} />
+                      </div>
+                      <span className="font-bold dark:text-white">Swap</span>
+                  </button>
+                  <button className="flex flex-col items-start justify-between p-4 h-24 rounded-2xl bg-light-card dark:bg-fintech-card border border-light-border dark:border-fintech-border hover:bg-light-bg dark:hover:bg-fintech-cardHover transition-all group opacity-50 cursor-not-allowed">
+                      <div className="p-2 rounded-lg bg-pink-500/10 text-pink-500 group-hover:scale-110 transition-transform">
+                          <Plus size={20} />
+                      </div>
+                      <span className="font-bold dark:text-white">Buy</span>
+                  </button>
+                  <button onClick={() => setActiveModal('send')} className="flex flex-col items-start justify-between p-4 h-24 rounded-2xl bg-light-card dark:bg-fintech-card border border-light-border dark:border-fintech-border hover:bg-light-bg dark:hover:bg-fintech-cardHover transition-all group">
+                      <div className="p-2 rounded-lg bg-fintech-accent/10 text-fintech-accent group-hover:scale-110 transition-transform">
+                          <Send size={20} />
+                      </div>
+                      <span className="font-bold dark:text-white">Send</span>
+                  </button>
+                  <button className="flex flex-col items-start justify-between p-4 h-24 rounded-2xl bg-light-card dark:bg-fintech-card border border-light-border dark:border-fintech-border hover:bg-light-bg dark:hover:bg-fintech-cardHover transition-all group">
+                      <div className="p-2 rounded-lg bg-light-muted/20 text-light-muted dark:text-fintech-muted group-hover:scale-110 transition-transform">
+                          <MoreHorizontal size={20} />
+                      </div>
+                      <span className="font-bold dark:text-white">More</span>
+                  </button>
+              </div>
+
+              {/* Stats Box */}
+              <div className="bg-light-card dark:bg-fintech-card border border-light-border dark:border-fintech-border rounded-2xl p-5 shadow-sm">
+                  <div className="flex justify-between items-center mb-1">
+                      <span className="text-sm text-light-muted dark:text-fintech-muted">Swaps this week</span>
+                      <span className="font-bold dark:text-white text-lg">12</span>
+                  </div>
+                  <div className="w-full bg-light-bg dark:bg-fintech-bg h-2 rounded-full overflow-hidden">
+                      <div className="bg-fintech-primary h-full w-3/4"></div>
+                  </div>
+              </div>
+
+              {/* 4. Recent Activity */}
+              <div>
+                  <h3 className="text-xl font-bold dark:text-white mb-4">Recent activity</h3>
+                  <div className="space-y-4">
+                      {[1, 2, 3].map((_, i) => (
+                          <div key={i} className="flex items-center gap-4">
+                              <div className="w-10 h-10 rounded-full bg-light-card dark:bg-fintech-card border border-light-border dark:border-fintech-border flex items-center justify-center">
+                                  {i === 0 ? <Repeat size={18} className="text-fintech-primary"/> : <ArrowRightLeft size={18} className="text-fintech-accent"/>}
+                              </div>
+                              <div className="flex-1">
+                                  <div className="font-bold dark:text-white text-sm">{i === 0 ? 'Swap ETH for USDC' : 'Receive ETH'}</div>
+                                  <div className="text-xs text-light-muted dark:text-fintech-muted">Oct {24 - i}</div>
+                              </div>
+                              <div className="text-sm font-medium dark:text-white">
+                                  {i === 0 ? '-0.05 ETH' : '+0.2 ETH'}
+                              </div>
+                          </div>
+                      ))}
+                  </div>
               </div>
           </div>
       </div>
 
-      {/* --- MODALS --- */}
-
-      {/* 1. Receive Modal */}
-      {activeModal === 'receive' && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm animate-fade-in p-4">
-              <div className="bg-white dark:bg-fintech-card w-full max-w-md rounded-2xl p-6 relative border border-fintech-border shadow-2xl">
-                  <button onClick={() => setActiveModal(null)} className="absolute top-4 right-4 p-1 hover:bg-gray-100 dark:hover:bg-fintech-bg rounded-lg">
-                      <X size={24} className="text-gray-500"/>
-                  </button>
-                  
-                  <h3 className="text-xl font-bold text-center mb-6 dark:text-white">Receive Assets</h3>
-                  
-                  <div className="flex justify-center mb-6">
-                      <div className="p-4 bg-white rounded-xl shadow-inner">
-                          {/* QR Code Placeholder (Using API for demo) */}
-                          <img 
-                            src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${account}`} 
-                            alt="Wallet QR" 
-                            className="w-48 h-48"
-                          />
-                      </div>
-                  </div>
-                  
-                  <div className="bg-light-bg dark:bg-fintech-bg p-3 rounded-xl flex items-center justify-between border border-light-border dark:border-fintech-border">
-                      <span className="font-mono text-sm truncate dark:text-white w-4/5">{account}</span>
-                      <button onClick={handleCopy} className="p-2 hover:bg-gray-200 dark:hover:bg-fintech-card rounded-lg transition-colors">
-                          {copied ? <Check size={18} className="text-green-500"/> : <Copy size={18} className="text-fintech-primary"/>}
+      {/* --- MODAL SEND --- */}
+      {activeModal === 'send' && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in p-4">
+              <div className="bg-white dark:bg-fintech-card w-full max-w-md rounded-3xl p-6 relative border border-light-border dark:border-fintech-border shadow-2xl">
+                  <div className="flex justify-between items-center mb-6">
+                      <h3 className="text-xl font-bold dark:text-white">Send</h3>
+                      <button onClick={() => setActiveModal(null)} className="p-2 hover:bg-light-bg dark:hover:bg-fintech-bg rounded-xl">
+                          <X size={20} className="text-gray-500"/>
                       </button>
                   </div>
                   
-                  <p className="text-center text-xs text-gray-500 mt-4">
-                      Send only supported tokens (Sepolia ETH, USDC, etc.) to this address.
-                  </p>
-              </div>
-          </div>
-      )}
-
-      {/* 2. Send Modal */}
-      {activeModal === 'send' && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm animate-fade-in p-4">
-              <div className="bg-white dark:bg-fintech-card w-full max-w-md rounded-2xl p-6 relative border border-fintech-border shadow-2xl">
-                  <button onClick={() => setActiveModal(null)} className="absolute top-4 right-4 p-1 hover:bg-gray-100 dark:hover:bg-fintech-bg rounded-lg">
-                      <X size={24} className="text-gray-500"/>
-                  </button>
-                  
-                  <h3 className="text-xl font-bold mb-6 dark:text-white">Send Assets</h3>
-                  
                   <div className="space-y-4">
-                      {/* Asset Selector */}
-                      <div>
-                          <label className="block text-sm text-gray-500 mb-1">Asset</label>
-                          <div className="flex gap-2">
-                              {assets.map(asset => (
-                                  <button 
-                                    key={asset.symbol}
-                                    onClick={() => setSelectedToken(asset)}
-                                    className={`flex items-center gap-2 px-3 py-2 rounded-xl border transition-all ${selectedToken.symbol === asset.symbol ? 'bg-fintech-primary/10 border-fintech-primary text-fintech-primary' : 'border-light-border dark:border-fintech-border hover:bg-gray-50 dark:hover:bg-fintech-bg dark:text-white'}`}
-                                  >
-                                      {asset.symbol}
-                                  </button>
-                              ))}
+                      {/* Asset Select */}
+                      <div className="p-3 bg-light-bg dark:bg-fintech-bg rounded-xl border border-light-border dark:border-fintech-border flex items-center justify-between cursor-pointer" onClick={() => setSelectedToken(selectedToken.symbol === 'ETH' ? assets[1] : assets[0])}>
+                          <div className="flex items-center gap-3">
+                              <img src={selectedToken.logo} className="w-8 h-8 rounded-full"/>
+                              <div className="font-bold dark:text-white">{selectedToken.symbol}</div>
+                          </div>
+                          <div className="text-right">
+                              <div className="text-xs text-light-muted dark:text-fintech-muted">Balance</div>
+                              <div className="font-mono text-sm dark:text-white">{selectedToken.balance.toFixed(4)}</div>
                           </div>
                       </div>
 
-                      {/* Recipient */}
-                      <div>
-                          <label className="block text-sm text-gray-500 mb-1">Recipient Address</label>
+                      {/* Recipient Input */}
+                      <div className="relative">
+                          <label className="text-xs font-bold text-light-muted dark:text-fintech-muted ml-1 mb-1 block">To Address</label>
                           <input 
                             type="text" 
                             placeholder="0x..." 
+                            className="w-full bg-light-bg dark:bg-fintech-bg border border-light-border dark:border-fintech-border rounded-xl p-4 outline-none focus:border-fintech-primary transition-colors font-mono text-sm dark:text-white"
                             value={recipient}
                             onChange={(e) => setRecipient(e.target.value)}
-                            className="input-field w-full text-sm py-3"
                           />
                       </div>
 
-                      {/* Amount */}
-                      <div>
-                          <div className="flex justify-between mb-1">
-                              <label className="block text-sm text-gray-500">Amount</label>
-                              <span className="text-xs text-gray-500">Bal: {selectedToken?.balance}</span>
-                          </div>
+                      {/* Amount Input */}
+                      <div className="relative">
+                          <label className="text-xs font-bold text-light-muted dark:text-fintech-muted ml-1 mb-1 block">Amount</label>
                           <input 
                             type="number" 
                             placeholder="0.0" 
+                            className="w-full bg-light-bg dark:bg-fintech-bg border border-light-border dark:border-fintech-border rounded-xl p-4 text-2xl font-bold outline-none focus:border-fintech-primary transition-colors dark:text-white"
                             value={amount}
                             onChange={(e) => setAmount(e.target.value)}
-                            className="input-field w-full text-sm py-3"
                           />
+                          <button className="absolute right-4 top-9 text-xs font-bold text-fintech-primary bg-fintech-primary/10 px-2 py-1 rounded" onClick={() => setAmount(selectedToken.balance.toString())}>MAX</button>
                       </div>
 
                       <button 
                         onClick={handleSend}
                         disabled={isSending}
-                        className="w-full btn-primary mt-4 py-3 flex items-center justify-center gap-2"
+                        className="w-full btn-primary py-4 rounded-xl text-lg font-bold mt-4 flex justify-center items-center gap-2"
                       >
-                          {isSending ? <Loader2 className="animate-spin" size={20}/> : <Send size={20}/>}
-                          {isSending ? 'Sending...' : 'Confirm Send'}
+                          {isSending ? <Loader2 className="animate-spin" /> : <Send size={20} />}
+                          {isSending ? 'Sending...' : 'Confirm'}
                       </button>
                   </div>
               </div>

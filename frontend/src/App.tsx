@@ -5,6 +5,9 @@ import { ToastProvider } from './context/ToastContext'; // Import ToastProvider
 import { Layout } from './components/Layout';
 import Dashboard from './pages/Dashboard';
 import WalletPage from './pages/Wallet';
+import Spot from './pages/Spot';
+import Earn from './pages/Earn';
+import Bridge from './pages/Bridge';
 
 const PlaceholderPage = ({ title }: { title: string }) => (
   <div className="flex flex-col items-center justify-center h-[60vh] text-center space-y-4 animate-fade-in">
@@ -24,8 +27,9 @@ function App() {
               <Routes>
                 <Route path="/" element={<Dashboard />} />
                 <Route path="/swap" element={<Dashboard />} />
-                <Route path="/spot" element={<PlaceholderPage title="Spot Trading" />} />
-                <Route path="/margin" element={<PlaceholderPage title="Margin Trading" />} />
+                <Route path="/spot" element={<Spot />} />
+                <Route path="/earn" element={<Earn />} />
+                <Route path="/bridge" element={<Bridge />} />
                 <Route path="/wallet" element={<WalletPage />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>

@@ -1,6 +1,6 @@
-🚀 Cryptoc DEX
+🚀 DecentraX DEX
 
-Cryptoc DEX adalah platform pertukaran terdesentralisasi (Decentralized Exchange) modern yang dibangun dengan antarmuka premium, mendukung mode gelap/terang, dan data pasar real-time. Proyek ini menghubungkan pengalaman pengguna (UX) web tradisional dengan fungsionalitas Web3.
+DecentraX DEX adalah platform pertukaran terdesentralisasi (Decentralized Exchange) modern yang dibangun dengan antarmuka premium, mendukung mode gelap/terang, dan data pasar real-time. Proyek ini menghubungkan pengalaman pengguna (UX) web tradisional dengan fungsionalitas Web3.
 
 <!-- Ganti dengan screenshot aplikasi Anda nanti -->
 
